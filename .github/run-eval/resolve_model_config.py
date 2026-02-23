@@ -221,13 +221,13 @@ def find_models_by_id(model_ids: list[str]) -> list[dict]:
     return resolved
 
 
-def test_model(
+def check_model(
     model_config: dict[str, Any],
     api_key: str,
     base_url: str,
     timeout: int = 60,
 ) -> tuple[bool, str]:
-    """Test a single model with a simple completion request using litellm.
+    """Check a single model with a simple completion request using litellm.
 
     Args:
         model_config: Model configuration dict with 'llm_config' key
@@ -244,9 +244,16 @@ def test_model(
     model_name = llm_config.get("model", "unknown")
     display_name = model_config.get("display_name", model_name)
 
+    # SDK-specific parameters that should not be passed to litellm
+    SDK_ONLY_PARAMS = {"disable_vision"}
+
     try:
-        # Build kwargs from llm_config, excluding 'model' which is passed separately
-        kwargs = {k: v for k, v in llm_config.items() if k != "model"}
+        # Build kwargs from llm_config, excluding 'model' and SDK-specific params
+        kwargs = {
+            k: v
+            for k, v in llm_config.items()
+            if k != "model" and k not in SDK_ONLY_PARAMS
+        }
 
         response = litellm.completion(
             model=model_name,
@@ -258,11 +265,29 @@ def test_model(
             **kwargs,
         )
 
+        # Debug: Print full response for troubleshooting (using print to stdout)
+        print(f"[DEBUG] Full response for {display_name}:")
+        print(f"[DEBUG]   Model: {model_name}")
+        print(f"[DEBUG]   Kwargs: {kwargs}")
+        print(f"[DEBUG]   Response type: {type(response)}")
+        print(f"[DEBUG]   Response: {response}")
+        if hasattr(response, 'choices') and response.choices:
+            print(f"[DEBUG]   Choices length: {len(response.choices)}")
+            print(f"[DEBUG]   Choices[0]: {response.choices[0]}")
+            if hasattr(response.choices[0], 'message'):
+                print(f"[DEBUG]   Message: {response.choices[0].message}")
+                if hasattr(response.choices[0].message, 'content'):
+                    content_val = response.choices[0].message.content
+                    print(f"[DEBUG]   Content: '{content_val}'")
+                    print(f"[DEBUG]   Content type: {type(content_val)}")
+                    print(f"[DEBUG]   Content repr: {repr(content_val)}")
+                    print(f"[DEBUG]   Content len: {len(content_val) if content_val else 'N/A'}")
+
         content = response.choices[0].message.content if response.choices else None
         if content:
             return True, f"✓ {display_name}: OK"
         else:
-            return False, f"✗ {display_name}: Empty response"
+            return False, f"✗ {display_name}: Empty response (content={repr(content)})"
 
     except litellm.exceptions.Timeout:
         return False, f"✗ {display_name}: Request timed out after {timeout}s"
@@ -302,7 +327,7 @@ def run_preflight_check(models: list[dict[str, Any]]) -> bool:
 
     all_passed = True
     for model_config in models:
-        success, message = test_model(model_config, api_key, base_url)
+        success, message = check_model(model_config, api_key, base_url)
         print(message)
         if not success:
             all_passed = False
