@@ -255,33 +255,17 @@ def check_model(
             if k != "model" and k not in SDK_ONLY_PARAMS
         }
 
+        # Some models (like GLM-5) may not respond well to very low max_tokens
+        # Use 50 tokens for the preflight check to be safe
         response = litellm.completion(
             model=model_name,
             messages=[{"role": "user", "content": "Say 'OK' if you can read this."}],
-            max_tokens=10,
+            max_tokens=50,
             api_key=api_key,
             base_url=base_url,
             timeout=timeout,
             **kwargs,
         )
-
-        # Debug: Print full response for troubleshooting (using print to stdout)
-        print(f"[DEBUG] Full response for {display_name}:")
-        print(f"[DEBUG]   Model: {model_name}")
-        print(f"[DEBUG]   Kwargs: {kwargs}")
-        print(f"[DEBUG]   Response type: {type(response)}")
-        print(f"[DEBUG]   Response: {response}")
-        if hasattr(response, 'choices') and response.choices:
-            print(f"[DEBUG]   Choices length: {len(response.choices)}")
-            print(f"[DEBUG]   Choices[0]: {response.choices[0]}")
-            if hasattr(response.choices[0], 'message'):
-                print(f"[DEBUG]   Message: {response.choices[0].message}")
-                if hasattr(response.choices[0].message, 'content'):
-                    content_val = response.choices[0].message.content
-                    print(f"[DEBUG]   Content: '{content_val}'")
-                    print(f"[DEBUG]   Content type: {type(content_val)}")
-                    print(f"[DEBUG]   Content repr: {repr(content_val)}")
-                    print(f"[DEBUG]   Content len: {len(content_val) if content_val else 'N/A'}")
 
         content = response.choices[0].message.content if response.choices else None
         if content:
